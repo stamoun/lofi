@@ -1,11 +1,13 @@
 import * as os from 'os';
+import LofiSettings from './models/lofiSettings';
 
 export const SPOTIFY_API_URL = 'https://api.spotify.com/v1';
 
 export const WINDOWS = os.platform() === 'win32';
 export const LINUX = os.platform() === 'linux';
 export const MACOS = os.platform() === 'darwin';
-export const MACOS_MOJAVE_AND_NEWER = MACOS && parseInt(os.release().split('.')[0]) >= 18;
+export const MACOS_MOJAVE_AND_NEWER =
+  MACOS && parseInt(os.release().split('.')[0]) >= 18;
 
 export const HEIGHT = 150;
 export const WIDTH = 150;
@@ -29,7 +31,7 @@ export const SETTINGS_CONTAINER = {
   HORIZONTAL: 500,
 };
 
-export const DEFAULT_SETTINGS = {
+export const DEFAULT_SETTINGS: LofiSettings = {
   version: '1.6.0',
   debug: false,
   hardware_acceleration: true,
@@ -38,8 +40,8 @@ export const DEFAULT_SETTINGS = {
     window: {
       always_on_top: true,
       show_in_taskbar: true,
-      x: 0,
-      y: 0,
+      x: 20,
+      y: 20,
       hide: false,
       metadata: false,
       scale: 1,
@@ -50,4 +52,6 @@ export const DEFAULT_SETTINGS = {
       display_volume_change: false,
     },
   },
+  access_token: '',
+  refresh_token: '',
 };

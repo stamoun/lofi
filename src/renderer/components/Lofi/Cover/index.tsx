@@ -1,23 +1,22 @@
 import * as React from 'react';
-import { remote } from 'electron';
-import settings from 'electron-settings';
 import {
-  MACOS,
+  // MACOS,
   DEFAULT_SETTINGS,
   LOFI_SHUFFLED_PLAYLIST_NAME,
 } from '../../../../constants';
-import * as path from 'path';
-import * as url from 'url';
+// import * as path from 'path';
+// import * as url from 'url';
 import _ from 'lodash';
 import Menu from './../Menu';
 import Controls from './Controls';
 import TrackInfo from './TrackInfo';
-import Visualizer from './Visualizer';
+// import Visualizer from './Visualizer';
 import Waiting from './Waiting';
-import RecreateChildOnPropsChange from '../../util/RecreateChildOnPropsChange';
+// import RecreateChildOnPropsChange from '../../util/RecreateChildOnPropsChange';
 
 import './style.scss';
 import { SpotifyApiInstance } from '../../../../api/spotify-api';
+import { ipcRenderer } from 'electron';
 
 enum VISUALIZATION_TYPE {
   NONE,
@@ -33,7 +32,6 @@ class Cover extends React.Component<any, any> {
     this.state = {
       currently_playing: null,
       visWindow: null,
-      showSettings: false,
       visualizationType: VISUALIZATION_TYPE.NONE,
       volume: 0,
       volume_increment: DEFAULT_SETTINGS.lofi.audio.volume_increment,
@@ -68,9 +66,9 @@ class Cover extends React.Component<any, any> {
     this.setState({ spotifyErrorIntervalId: spotifyErrorIntervalId });
 
     function onMouseWheel(e: WheelEvent) {
-      const volume_increment = that.props.lofi.state.lofiSettings.audio
-        ? that.props.lofi.state.lofiSettings.audio.volume_increment
-        : DEFAULT_SETTINGS.lofi.audio.volume_increment;
+      const volume_increment =
+        that.props.volume_increment ??
+        DEFAULT_SETTINGS.lofi.audio.volume_increment;
 
       const volume_percent = volume_increment / 100;
       const new_volume = _.clamp(
@@ -181,21 +179,22 @@ class Cover extends React.Component<any, any> {
   }
 
   componentDidUpdate() {
+    // TODO Is this still required?
     // Should we hide or show the window?
-    if (this.state.currently_playing) {
-      if (!remote.getCurrentWindow().isVisible()) {
-        remote.getCurrentWindow().show();
-      }
-    } else {
-      if (this.props.settings.hide && remote.getCurrentWindow().isVisible()) {
-        remote.getCurrentWindow().hide();
-      } else if (
-        !this.props.settings.hide &&
-        !remote.getCurrentWindow().isVisible()
-      ) {
-        remote.getCurrentWindow().show();
-      }
-    }
+    // if (this.state.currently_playing) {
+    //   if (!remote.getCurrentWindow().isVisible()) {
+    //     remote.getCurrentWindow().show();
+    //   }
+    // } else {
+    //   if (this.props.settings.hide && remote.getCurrentWindow().isVisible()) {
+    //     remote.getCurrentWindow().hide();
+    //   } else if (
+    //     !this.props.settings.hide &&
+    //     !remote.getCurrentWindow().isVisible()
+    //   ) {
+    //     remote.getCurrentWindow().show();
+    //   }
+    // }
     if (this.state.visWindow) {
       this.state.visWindow.webContents.send(
         'set-visualization',
@@ -235,15 +234,6 @@ class Cover extends React.Component<any, any> {
     if (!currentlyPlaying) {
       return;
     }
-
-    // NOTE: debugging purposes
-    // console.log(currently_playing);
-
-    // if (currently_playing.context && currently_playing.context.type === "playlist") {
-    //   console.log("playing a playlist; we can potentially shuffle");
-    // } else {
-    //   console.log("shuffle unavailable for this track")
-    // }
 
     this.setState({
       currently_playing: currentlyPlaying,
@@ -295,8 +285,7 @@ class Cover extends React.Component<any, any> {
       this.state.visWindow.close();
       this.state.visWindow.destroy();
     }
-    let mainWindow = remote.getCurrentWindow();
-    mainWindow.close();
+    ipcRenderer.send('close');
   }
 
   async getAllTracksFromPlaylist(playlist_id: string): Promise<string[]> {
@@ -357,7 +346,6 @@ class Cover extends React.Component<any, any> {
     const playlist_id = this.state.currently_playing.context.uri
       .split(':')
       .reverse()[0];
-    // const tracks = (await this.getAllTracksFromPlaylist(playlist_id));
 
     const playlist = await SpotifyApiInstance.fetch(
       '/playlists/' + playlist_id + '/tracks',
@@ -393,15 +381,6 @@ class Cover extends React.Component<any, any> {
       }
     }
     return;
-
-    // // Play the generated playlist
-    // fetch(API_URL + '/me/player/play', {
-    //   method: 'PUT',
-    //   headers: new Headers({
-    //     'Authorization': 'Bearer '+ this.props.token
-    //   }),
-    //   body: JSON.stringify({ uris: shuffled})
-    // })
   }
 
   async createLofiPlaylist() {}
@@ -439,66 +418,67 @@ class Cover extends React.Component<any, any> {
         });
         break;
       case VISUALIZATION_TYPE.SMALL:
-        const BrowserWindow = remote.BrowserWindow;
-        const visWindow = new BrowserWindow({
-          webPreferences: {
-            nodeIntegration: true, 
-            enableRemoteModule: true
-          },
-        });
-        visWindow.on('close', () => {
-          this.cycleVisualizationType();
-        });
-        visWindow.setMenuBarVisibility(false);
-        visWindow.loadURL(
-          url.format({
-            pathname: path.join(__dirname, './visualizer.html'),
-            protocol: 'file:',
-            slashes: true,
-          })
-        );
+        // TODO
+        //   const BrowserWindow = remote.BrowserWindow;
+        //   const visWindow = new BrowserWindow({
+        //     webPreferences: {
+        //       nodeIntegration: true,
+        //       enableRemoteModule: true
+        //     },
+        //   });
+        //   visWindow.on('close', () => {
+        //     this.cycleVisualizationType();
+        //   });
+        //   visWindow.setMenuBarVisibility(false);
+        //   visWindow.loadURL(
+        //     url.format({
+        //       pathname: path.join(__dirname, './visualizer.html'),
+        //       protocol: 'file:',
+        //       slashes: true,
+        //     })
+        //   );
 
-        // On MacOS, setSimpleFullScreen is buggy/slow
-        // We need slightly different logic for where the window pops up because Windows is full screen while MacOS isn't
-        if (MACOS) {
-          // Just show regular window instead
-          visWindow.setPosition(
-            remote.screen.getCursorScreenPoint().x - 400,
-            remote.screen.getCursorScreenPoint().y
-          );
-          visWindow.setSize(800, 600);
-        } else {
-          visWindow.setPosition(
-            remote.getCurrentWindow().getBounds().x,
-            remote.getCurrentWindow().getBounds().y
-          );
-          visWindow.setSimpleFullScreen(true);
-          if (Boolean(settings.getSync('debug')) === true) {
-            visWindow.webContents.openDevTools({ mode: 'detach' });
-          }
-        }
+        //   // On MacOS, setSimpleFullScreen is buggy/slow
+        //   // We need slightly different logic for where the window pops up because Windows is full screen while MacOS isn't
+        //   if (MACOS) {
+        //     // Just show regular window instead
+        //     visWindow.setPosition(
+        //       remote.screen.getCursorScreenPoint().x - 400,
+        //       remote.screen.getCursorScreenPoint().y
+        //     );
+        //     visWindow.setSize(800, 600);
+        //   } else {
+        //     visWindow.setPosition(
+        //       remote.getCurrentWindow().getBounds().x,
+        //       remote.getCurrentWindow().getBounds().y
+        //     );
+        //     visWindow.setSimpleFullScreen(true);
+        //     if (Boolean(settings.getSync('debug')) === true) {
+        //       visWindow.webContents.openDevTools({ mode: 'detach' });
+        //     }
+        //   }
 
-        visWindow.webContents.once('dom-ready', () => {
-          visWindow.webContents.send(
-            'set-visualization',
-            this.props.lofi.state.lofiSettings.visualizationId
-          );
-        });
+        //   visWindow.webContents.once('dom-ready', () => {
+        //     visWindow.webContents.send(
+        //       'set-visualization',
+        //       this.props.lofi.state.lofiSettings.visualizationId
+        //     );
+        //   });
 
-        this.setState({
-          visWindow,
-          visualizationType: VISUALIZATION_TYPE.BIG,
-        });
-        break;
-      case VISUALIZATION_TYPE.BIG:
-        // there are OS-y ways of closing the window, so make sure it still exists before we attempt to close
-        if (this.state.visWindow) {
-          this.state.visWindow.destroy();
-        }
-        this.setState({
-          visWindow: null,
-          visualizationType: VISUALIZATION_TYPE.NONE,
-        });
+        //   this.setState({
+        //     visWindow,
+        //     visualizationType: VISUALIZATION_TYPE.BIG,
+        //   });
+        //   break;
+        // case VISUALIZATION_TYPE.BIG:
+        //   // there are OS-y ways of closing the window, so make sure it still exists before we attempt to close
+        //   if (this.state.visWindow) {
+        //     this.state.visWindow.destroy();
+        //   }
+        //   this.setState({
+        //     visWindow: null,
+        //     visualizationType: VISUALIZATION_TYPE.NONE,
+        //   });
         break;
       default:
     }
@@ -526,7 +506,7 @@ class Cover extends React.Component<any, any> {
       ) {
         return this.state.currently_playing.item.album.images[0].url;
       } else if (this.state.currently_playing.currently_playing_type == 'ad') {
-        // TODO: Cover art for ads?
+        // TODO: Cover art for ads? (open issue: https://github.com/dvx/lofi/issues/142)
         return '';
       } else if (
         this.state.currently_playing.currently_playing_type == 'episode'
@@ -592,8 +572,8 @@ class Cover extends React.Component<any, any> {
         <Menu parent={this} visIcon={this.visIconFromType()} />
         {this.state.currently_playing ? (
           <TrackInfo
-            offset={this.props.lofi.state.side_length}
-            persistent={this.props.settings.metadata}
+            offset={this.props.side_length}
+            persistent={this.props.metadata}
             side={this.props.side}
             track={this.getTrack()}
             artist={this.getArtist()}
@@ -607,7 +587,7 @@ class Cover extends React.Component<any, any> {
               : {}
           }
         />
-        <RecreateChildOnPropsChange
+        {/* <RecreateChildOnPropsChange
           visType={this.state.visualizationType}
           visId={this.props.visualizationId}>
           <Visualizer
@@ -615,7 +595,7 @@ class Cover extends React.Component<any, any> {
             currentlyPlaying={this.state.currently_playing}
             show={this.state.visualizationType === VISUALIZATION_TYPE.SMALL}
           />
-        </RecreateChildOnPropsChange>
+        </RecreateChildOnPropsChange> */}
         {this.state.currently_playing ? (
           <Controls parent={this} />
         ) : (

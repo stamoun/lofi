@@ -1,14 +1,15 @@
 import React from 'react';
-import * as settings from 'electron-settings';
 import TitleBar from 'frameless-titlebar';
 import './style.scss';
 
 import { visualizations } from '../../../../visualizations/visualizations.js';
 import { MACOS, DEFAULT_SETTINGS } from '../../../../constants';
 import { get, set } from 'lodash';
-import { remote } from 'electron';
+import Store from 'electron-store';
+// import { BrowserWindow } from 'electron';
 
 import { Platform } from 'frameless-titlebar/dist/title-bar/typings';
+import LofiSettings from '../../../../models/lofiSettings';
 
 interface Setting {
   name: string;
@@ -18,11 +19,14 @@ interface Setting {
 class Settings extends React.Component<any, any> {
   private oldSettings: any;
   private settingsToWatch: Setting[];
+  private store: Store;
+
   constructor(props: any) {
     super(props);
-    this.state = {
-      ...settings.getSync(),
-    };
+
+    this.store = new Store();
+    const settings = this.store.get('settings') as LofiSettings;
+    this.state = { ...settings };
 
     this.oldSettings = {};
     this.settingsToWatch = this.initSettingsToWatch();
@@ -34,35 +38,37 @@ class Settings extends React.Component<any, any> {
   }
 
   initSettingsToWatch() {
-    const mainWindow = remote.getCurrentWindow();
+    // TODO
+    // const mainWindow = BrowserWindow.getFocusedWindow();
     const settingsToWatch: Setting[] = [
       {
         name: 'lofi.window.always_on_top',
-        callback: (value) => mainWindow.setAlwaysOnTop(value),
+        // TODO
+        // callback: (value) => mainWindow.setAlwaysOnTop(value),
       },
       {
         name: 'lofi.window.show_in_taskbar',
         callback: (value) => {
-          mainWindow.setSkipTaskbar(!value);
-          mainWindow.setFocusable(value);
-
-          // Workaround to make setSkipTaskbar behave
-          // cf. https://github.com/electron/electron/issues/18378
-          mainWindow.on('focus', () => {
-            mainWindow.setSkipTaskbar(!value);
-          });
+          // TODO
+          // ma.setSkipTaskbar(!value);
+          // ma.setFocusable(value);
+          // Wo to make setSkipTaskbar behave
+          // cf//github.com/electron/electron/issues/18378
+          // ma.on('focus', () => {
+          //   ow.setSkipTaskbar(!value);
+          // })
         },
       },
-      { name: 'lofi.window.hide' },
-      { name: 'lofi.window.metadata' },
-      { name: 'lofi.visualization' },
+      { name: 'window.hide' },
+      { name: 'window.metadata' },
+      { name: 'visualization' },
       { name: 'hardware_acceleration' },
       {
         name: 'debug',
-        callback: (value) =>
-          value
-            ? mainWindow.webContents.openDevTools({ mode: 'detach' })
-            : mainWindow.webContents.closeDevTools(),
+        // callback: (value) =>
+        //   value
+        //     ? mainWindow.webContents.openDevTools({ mode: 'detach' })
+        //     : mainWindow.webContents.closeDevTools(),
       },
       { name: 'lofi.audio.volume_increment' },
     ];
@@ -80,7 +86,16 @@ class Settings extends React.Component<any, any> {
         setting.name,
         get(DEFAULT_SETTINGS, setting.name)
       );
-      settings.setSync(setting.name, get(DEFAULT_SETTINGS, setting.name));
+      // TODO
+      // storage.set(
+      //   setting.name,
+      //   get(DEFAULT_SETTINGS, setting.name),
+      //   (error) => {
+      //     if (error) {
+      //       throw error;
+      //     }
+      //   }
+      // );
       if (setting.callback) {
         setting.callback(get(DEFAULT_SETTINGS, setting.name));
       }
@@ -95,30 +110,18 @@ class Settings extends React.Component<any, any> {
       return;
     }
 
-    // Commit window settings
-    settings.setSync(
-      'lofi.window.always_on_top',
-      this.state.lofi.window.always_on_top
-    );
-    settings.setSync(
-      'lofi.window.show_in_taskbar',
-      this.state.lofi.window.show_in_taskbar
-    );
-    settings.setSync('lofi.window.hide', this.state.lofi.window.hide);
-    settings.setSync('lofi.window.metadata', this.state.lofi.window.metadata);
+    const settings = this.store.get('settings') as LofiSettings;
+    settings.lofi.window.always_on_top = this.state.lofi.window.always_on_top;
+    settings.lofi.window.show_in_taskbar =
+      this.state.lofi.window.show_in_taskbar;
+    settings.lofi.window.hide = this.state.lofi.window.hide;
+    settings.lofi.window.metadata = this.state.lofi.window.metadata;
+    settings.lofi.visualization = this.state.lofi.visualization;
+    settings.lofi.audio = this.state.lofi.audio.volume_increment;
+    settings.hardware_acceleration = this.state.hardware_acceleration;
+    settings.debug = this.state.debug;
 
-    // Commit visualization settings
-    settings.setSync('lofi.visualization', this.state.lofi.visualization);
-
-    // Commit advanced settings
-    settings.setSync('hardware_acceleration', this.state.hardware_acceleration);
-    settings.setSync('debug', this.state.debug);
-
-    // Commit audio settings
-    settings.setSync(
-      'lofi.audio.volume_increment',
-      this.state.lofi.audio.volume_increment
-    );
+    this.store.set('settings', settings);
 
     const changedSettings = this.getChangedSettings();
     changedSettings.map((setting) => {

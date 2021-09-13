@@ -8,12 +8,10 @@ import {
   Menu,
   nativeImage,
 } from 'electron';
+import Store from 'electron-store';
 import * as path from 'path';
-import * as url from 'url';
-import settings from 'electron-settings';
 import {
   MACOS,
-  WINDOWS,
   LINUX,
   CONTAINER,
   SETTINGS_CONTAINER,
@@ -22,6 +20,7 @@ import {
 
 // Webpack imports
 import '../../build/Release/black-magic.node';
+import LofiSettings from '../models/lofiSettings';
 import '../../icon.png';
 import '../../icon.ico';
 
@@ -31,12 +30,13 @@ app.commandLine.appendArgument('disable-gpu-vsync');
 app.commandLine.appendSwitch('enable-transparent-visuals');
 
 // Settings bootstrap
-const HARDWARE_ACCELERATION: boolean = Boolean(
-  settings.getSync('hardware_acceleration')
-);
-const windowConfig: any = {};
+Store.initRenderer();
+const store = new Store();
+const useGpu =
+  store.get('settings.hardware_acceleration') ??
+  DEFAULT_SETTINGS.hardware_acceleration;
 
-if (!HARDWARE_ACCELERATION) {
+if (!useGpu) {
   app.disableHardwareAcceleration();
 }
 
@@ -48,6 +48,8 @@ let isSingleInstance: boolean = app.requestSingleInstanceLock();
 if (!isSingleInstance) {
   app.quit();
 }
+
+const windowConfig: any = {};
 
 function createWindow() {
   // Create the browser window
@@ -66,8 +68,8 @@ function createWindow() {
     webPreferences: {
       allowRunningInsecureContent: false,
       nodeIntegration: true,
+      contextIsolation: false,
       nativeWindowOpen: true,
-      enableRemoteModule: true,
     },
     backgroundColor: '#00000000',
   });
@@ -83,13 +85,7 @@ function createWindow() {
   mainWindow.setVisibleOnAllWorkspaces(true);
 
   // And load the index.html of the app
-  mainWindow.loadURL(
-    url.format({
-      pathname: path.join(__dirname, './index.html'),
-      protocol: 'file:',
-      slashes: true,
-    })
-  );
+  mainWindow.loadURL(path.join(__dirname, './index.html'));
 
   // Every 10 milliseconds, poll to see if we should ignore mouse events or not
   mousePoller = setInterval(() => {
@@ -120,18 +116,16 @@ function createWindow() {
     }
   }, 10);
 
-  // Open the DevTools.
-  if (Boolean(settings.getSync('debug')) === true) {
+  if (store.get('settings.debug') === true) {
     mainWindow.webContents.openDevTools({ mode: 'detach' });
   }
 
   ipcMain.on(
     'windowMoving',
-    (e: Event, { mouseX, mouseY }: { mouseX: number; mouseY: number }) => {
-      const { x, y } = screen.getCursorScreenPoint();
-
+    (_: Event, { mouseX, mouseY }: { mouseX: number; mouseY: number }) => {
       // Use setBounds instead of setPosition
       // See: https://github.com/electron/electron/issues/9477#issuecomment-406833003
+      const { x, y } = screen.getCursorScreenPoint();
       mainWindow.setBounds({
         height: mainWindow.getSize()[0],
         width: mainWindow.getSize()[1],
@@ -139,59 +133,55 @@ function createWindow() {
         y: y - mouseY,
       });
 
-      // Ugly black transparency fix when dragging transparent window past screen edges
-      // From what I understand, setting opacity forces a re-draw
-      // TODO: only happens on Windows?
-      if (WINDOWS) {
-        // This breaks the UI if hardware acceleration is disabled
-        if (HARDWARE_ACCELERATION) {
-          mainWindow.setOpacity(1);
-        }
-      }
+      const bounds = mainWindow.getBounds();
+      const screenBounds = screen.getDisplayMatching(bounds).bounds;
+      const centerPosX = bounds.x + bounds.width / 2;
+      const onLeftSide = centerPosX - screenBounds.x < screenBounds.width / 2;
+      mainWindow.webContents.send('window-moved', onLeftSide);
     }
   );
 
   ipcMain.on(
     'windowMoved',
-    (e: Event, { mouseX, mouseY }: { mouseX: number; mouseY: number }) => {
+    (_: Event, { mouseX, mouseY }: { mouseX: number; mouseY: number }) => {
       const { x, y } = screen.getCursorScreenPoint();
       windowConfig.x = x - mouseX;
       windowConfig.y = y - mouseY;
     }
   );
 
-  ipcMain.on('windowResizing', (e: Event, length: number) => {
+  ipcMain.on('windowResizing', (_: Event, length: number) => {
     windowConfig.side = length;
   });
 
-  mainWindow.webContents.on('new-window', function (
-    event: Electron.NewWindowEvent,
-    url: string,
-    frameName: string,
-    disposition: string,
-    options: any
-  ) {
-    event.preventDefault();
-
-    switch (frameName) {
-      case 'settings': {
-        createSettingsWindow(event, options);
-        break;
-      }
-      case 'about': {
-        createAboutWindow(event, options);
-        break;
-      }
-      default: {
-        shell.openExternal(url);
-      }
-    }
+  ipcMain.on('close', (_: Event) => {
+    mainWindow.close();
   });
+
+  mainWindow.webContents.setWindowOpenHandler(
+    (details: Electron.HandlerDetails) => {
+      console.log(details.frameName);
+      switch (details.frameName) {
+        case 'settings': {
+          createSettingsWindow();
+          break;
+        }
+        case 'about': {
+          createAboutWindow();
+          break;
+        }
+        default: {
+          shell.openExternal(details.url);
+        }
+      }
+
+      return { action: 'deny' };
+    }
+  );
 }
 
-function createSettingsWindow(event: Electron.NewWindowWebContentsEvent, options: any) {
-  // Open settings window as modal
-  Object.assign(options, {
+function createSettingsWindow() {
+  const settingsWindow = new BrowserWindow({
     x:
       screen.getDisplayMatching(mainWindow.getBounds()).bounds.x -
       SETTINGS_CONTAINER.HORIZONTAL / 2 +
@@ -209,25 +199,28 @@ function createSettingsWindow(event: Electron.NewWindowWebContentsEvent, options
     maximizable: false,
     focusable: true,
     title: 'Lofi Settings',
+    webPreferences: {
+      nativeWindowOpen: true,
+    },
   });
-  event.newGuest = new BrowserWindow(options);
-  event.newGuest.setMenu(null);
-  event.newGuest.setResizable(true);
-  if (Boolean(settings.getSync('debug')) === true) {
-    event.newGuest.webContents.openDevTools({ mode: 'detach' });
+  settingsWindow.setMenu(null);
+  settingsWindow.setResizable(true);
+  if (store.get('settings.debug') === true) {
+    settingsWindow.webContents.openDevTools({ mode: 'detach' });
   }
 }
 
-function createAboutWindow(event: Electron.NewWindowWebContentsEvent, options: any) {
-  Object.assign(options, {
+function createAboutWindow() {
+  const mainWindowBounds = mainWindow.getBounds();
+  const aboutWindow = new BrowserWindow({
     x:
-      screen.getDisplayMatching(mainWindow.getBounds()).bounds.x -
+      screen.getDisplayMatching(mainWindowBounds).bounds.x -
       400 / 2 +
-      screen.getDisplayMatching(mainWindow.getBounds()).bounds.width / 2,
+      screen.getDisplayMatching(mainWindowBounds).bounds.width / 2,
     y:
-      screen.getDisplayMatching(mainWindow.getBounds()).bounds.y -
+      screen.getDisplayMatching(mainWindowBounds).bounds.y -
       400 / 2 +
-      screen.getDisplayMatching(mainWindow.getBounds()).bounds.height / 2,
+      screen.getDisplayMatching(mainWindowBounds).bounds.height / 2,
     height: 400,
     width: 400,
     modal: false,
@@ -238,11 +231,11 @@ function createAboutWindow(event: Electron.NewWindowWebContentsEvent, options: a
     focusable: true,
     title: 'About Lofi',
   });
-  event.newGuest = new BrowserWindow(options);
-  event.newGuest.setMenu(null);
-  event.newGuest.setResizable(true);
-  if (Boolean(settings.getSync('debug')) === true) {
-    event.newGuest.webContents.openDevTools({ mode: 'detach' });
+
+  aboutWindow.setMenu(null);
+  aboutWindow.setResizable(true);
+  if (store.get('settings.debug') === true) {
+    aboutWindow.webContents.openDevTools({ mode: 'detach' });
   }
 }
 
@@ -253,31 +246,18 @@ let tray = null;
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
 app.on('ready', () => {
-  settings.defaults(DEFAULT_SETTINGS);
-  // If we have a settings version mismatch, nuke the settings
-  if (
-    !settings.hasSync('version') ||
-    String(settings.getSync('version')) !== String(DEFAULT_SETTINGS.version)
-  ) {
-    settings.resetToDefaultsSync();
+  const version = store.get('settings.version');
 
-    // Default position is based on OS; (0,0) sometimes breaks
-    settings.setSync(
-      'lofi.window.x',
-      0 - CONTAINER.HORIZONTAL / 2 + screen.getPrimaryDisplay().size.width / 2
-    );
-    settings.setSync(
-      'lofi.window.y',
-      0 - CONTAINER.VERTICAL / 2 + screen.getPrimaryDisplay().size.height / 2
-    );
+  if (version === null || version !== String(DEFAULT_SETTINGS.version)) {
   }
 
+  // version mismatch, nuke the settings
   Object.assign(windowConfig, {
-    x: Number(settings.getSync('lofi.window.x')),
-    y: Number(settings.getSync('lofi.window.y')),
-    always_on_top: Boolean(settings.getSync('lofi.window.always_on_top')),
-    show_in_taskbar: Boolean(settings.getSync('lofi.window.show_in_taskbar')),
-    side: Number(settings.getSync('lofi.window.side')),
+    x: Number(store.get('settings.lofi.window.x')),
+    y: Number(store.get('settings.lofi.window.y')),
+    always_on_top: Boolean(store.get('settings.lofi.window.always_on_top')),
+    show_in_taskbar: Boolean(store.get('settings.lofi.window.show_in_taskbar')),
+    side: Number(store.get('settings.lofi.window.side')),
   });
 
   if (LINUX) {
@@ -323,6 +303,12 @@ app.on('ready', () => {
   ]);
   tray.setContextMenu(contextMenu);
   tray.setToolTip(`lofi v${DEFAULT_SETTINGS.version}`);
+
+  mainWindow.once('ready-to-show', () => {
+    const bounds = mainWindow.getBounds();
+    const screenBounds = screen.getDisplayMatching(bounds).bounds;
+    mainWindow.webContents.send('window-ready', bounds, screenBounds);
+  });
 });
 
 // Quit when all windows are closed.
@@ -332,10 +318,12 @@ app.on('window-all-closed', () => {
 });
 
 app.on('will-quit', () => {
-  // Save window position for next launch
-  settings.setSync('lofi.window.x', windowConfig.x);
-  settings.setSync('lofi.window.y', windowConfig.y);
-  settings.setSync('lofi.window.side', windowConfig.side);
+  const settings = store.get('settings') as LofiSettings;
+  settings.lofi.window.x = windowConfig.x;
+  settings.lofi.window.y = windowConfig.y;
+  settings.lofi.window.side = windowConfig.side;
+
+  store.set('settings', settings);
 });
 
 app.on('activate', () => {

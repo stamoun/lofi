@@ -1,6 +1,6 @@
 import * as React from 'react';
-import * as settings from 'electron-settings';
-import { ipcRenderer, remote } from 'electron';
+import { ipcRenderer, Rectangle } from 'electron';
+import Store from 'electron-store';
 import {
   getAuthUrl,
   refreshAccessToken,
@@ -20,6 +20,7 @@ import WindowPortal from '../util/WindowPortal';
 
 import './style.scss';
 import { SpotifyApiInstance } from '../../../api/spotify-api';
+import LofiSettings from '../../../models/lofiSettings';
 
 enum SIDE {
   LEFT,
@@ -27,35 +28,15 @@ enum SIDE {
 }
 
 class Lofi extends React.Component<any, any> {
+  private store: Store;
+  private bounds: Rectangle;
+  private screenBounds: Rectangle;
+
   constructor(props: any) {
     super(props);
 
-    this.state = {
-      access_token: settings.getSync('access_token'),
-      refresh_token: settings.getSync('refresh_token'),
-      showSettings: false,
-      showAbout: false,
-      lofiSettings: settings.getSync('lofi'),
-      side_length: settings.getSync('lofi.window.side'),
-      window_side: (() => {
-        if (
-          (remote.getCurrentWindow().getBounds().x +
-            remote.getCurrentWindow().getBounds().width) /
-            2 -
-            remote.screen.getDisplayMatching(
-              remote.getCurrentWindow().getBounds()
-            ).bounds.x <
-          remote.screen.getDisplayMatching(
-            remote.getCurrentWindow().getBounds()
-          ).bounds.width /
-            2
-        ) {
-          return SIDE.LEFT;
-        }
-        return SIDE.RIGHT;
-      })(),
-      auth_url: '',
-    };
+    this.store = new Store();
+    this.loadSettings();
 
     // Allow to open settings via IPC channel (e.g. triggered by a taskbar click)
     ipcRenderer.on('show-settings', () => {
@@ -66,10 +47,55 @@ class Lofi extends React.Component<any, any> {
     ipcRenderer.on('show-about', () => {
       this.showAboutWindow();
     });
+
+    ipcRenderer.on('window-moved', (_: Event, onLeftSide: boolean) => {
+      this.setState({ window_side: onLeftSide ? SIDE.LEFT : SIDE.RIGHT });
+    });
+
+    ipcRenderer.on(
+      'window-ready',
+      async (
+        _: Electron.IpcRendererEvent,
+        bounds: Rectangle,
+        screenBounds: Rectangle
+      ) => {
+        this.bounds = bounds;
+        this.screenBounds = screenBounds;
+        this.setScreenSide();
+        await this.setupWindow();
+        this.forceUpdate();
+      }
+    );
+  }
+
+  loadSettings() {
+    const settings = this.store.get('settings') as LofiSettings;
+    this.state = {
+      access_token: settings.access_token,
+      refresh_token: settings.refresh_token,
+      showSettings: false,
+      showAbout: false,
+      lofi: settings.lofi,
+      side_length: settings.lofi.window.side,
+      auth_url: '',
+    };
+  }
+
+  // Determine if the window is in the leftmost or rightmost part of the screen
+  setScreenSide() {
+    const appCenterX = this.bounds.x + this.bounds.width / 2;
+
+    const side =
+      appCenterX - this.screenBounds.x < this.screenBounds.width / 2
+        ? SIDE.LEFT
+        : SIDE.RIGHT;
+
+    this.setState({ window_side: side });
   }
 
   reloadSettings() {
-    this.setState({ lofiSettings: settings.getSync('lofi') });
+    // FIXME Called when we modify/reset the settings
+    // this.setState({ lofiSettings: settings.getSync('lofi') });
   }
 
   async handleAuth() {
@@ -91,11 +117,13 @@ class Lofi extends React.Component<any, any> {
 
   updateTokens(data: AuthData) {
     if (!data || !data.access_token || !data.refresh_token) {
-      settings.deleteSync('access_token');
-      settings.deleteSync('refresh_token');
+      this.store.delete('settings.access_token');
+      this.store.delete('settings.refresh_token');
     } else {
-      settings.setSync('access_token', data.access_token);
-      settings.setSync('refresh_token', data.refresh_token);
+      const settings = this.store.get('settings') as LofiSettings;
+      settings.access_token = data.access_token;
+      settings.refresh_token = data.refresh_token;
+      this.store.set('settings', settings);
     }
 
     SpotifyApiInstance.updateTokens(data);
@@ -104,8 +132,8 @@ class Lofi extends React.Component<any, any> {
     this.setState({ refresh_token: data?.refresh_token });
   }
 
-  componentDidMount() {
-    this.handleAuth();
+  async setupWindow() {
+    await this.handleAuth();
 
     // Move the window when dragging specific element without cannibalizing events
     // Credit goes out to @danielravina
@@ -214,19 +242,6 @@ class Lofi extends React.Component<any, any> {
 
     let moveWindow = function () {
       ipcRenderer.send('windowMoving', { mouseX, mouseY });
-      if (
-        remote.screen.getCursorScreenPoint().x -
-          remote.screen.getDisplayMatching(
-            remote.getCurrentWindow().getBounds()
-          ).bounds.x <
-        remote.screen.getDisplayMatching(remote.getCurrentWindow().getBounds())
-          .bounds.width /
-          2
-      ) {
-        that.setState({ window_side: SIDE.LEFT });
-      } else {
-        that.setState({ window_side: SIDE.RIGHT });
-      }
       animationId = requestAnimationFrame(moveWindow);
     }.bind(that);
 
@@ -285,17 +300,16 @@ class Lofi extends React.Component<any, any> {
           </WindowPortal>
         ) : null}
         {this.state.showAbout ? (
-          <WindowPortal
-            onUnload={this.hideAboutWindow.bind(this)}
-            name="about">
+          <WindowPortal onUnload={this.hideAboutWindow.bind(this)} name="about">
             <About lofi={this} className="about-wnd" />
           </WindowPortal>
         ) : null}
         {this.state.access_token ? (
           <Cover
-            visualizationId={this.state.lofiSettings.visualization}
-            settings={this.state.lofiSettings.window}
+            volume_increment={this.state.lofi.audio.volume_increment}
+            metadata={this.state.lofi.window.metadata}
             side={this.state.window_side}
+            side_length={this.state.side_length}
             lofi={this}
           />
         ) : (

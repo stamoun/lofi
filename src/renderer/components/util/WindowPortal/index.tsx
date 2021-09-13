@@ -7,13 +7,13 @@ import React from 'react';
 import ReactDOM from 'react-dom';
 
 /**
- * The NewWindow class object.
+ * The WindowPortal class object.
  * @public
  */
 
-class NewWindow extends React.PureComponent<any, any> {
+class WindowPortal extends React.PureComponent<any, any> {
   /**
-   * NewWindow default props.
+   * WindowPortal default props.
    */
   static defaultProps = {
     url: '',
@@ -34,7 +34,7 @@ class NewWindow extends React.PureComponent<any, any> {
   released: boolean;
 
   /**
-   * The NewWindow function constructor.
+   * The WindowPortal function constructor.
    * @param {Object} props
    */
   constructor(props: any) {
@@ -49,7 +49,7 @@ class NewWindow extends React.PureComponent<any, any> {
   }
 
   /**
-   * Render the NewWindow component.
+   * Render the WindowPortal component.
    */
   render() {
     if (!this.state.mounted) return null;
@@ -62,7 +62,7 @@ class NewWindow extends React.PureComponent<any, any> {
   }
 
   /**
-   * Create the new window when NewWindow component mount.
+   * Create the new window when WindowPortal component mount.
    */
   openChild() {
     const { url, title, name, features, onBlock, onOpen, center } = this.props;
@@ -144,7 +144,7 @@ class NewWindow extends React.PureComponent<any, any> {
   }
 
   /**
-   * Close the opened window (if any) when NewWindow will unmount.
+   * Close the opened window (if any) when WindowPortal will unmount.
    */
   componentWillUnmount() {
     if (this.window) {
@@ -250,7 +250,7 @@ function copyStyles(
  * @private
  */
 
-function toWindowFeatures(obj: { [x: string]: any }) {
+function toWindowFeatures(obj: { [x: string]: any }): string {
   return Object.keys(obj)
     .reduce((features, name) => {
       const value = obj[name];
@@ -269,4 +269,4 @@ function toWindowFeatures(obj: { [x: string]: any }) {
  * @private
  */
 
-export default NewWindow;
+export default WindowPortal;

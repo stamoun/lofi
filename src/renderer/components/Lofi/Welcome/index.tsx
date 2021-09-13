@@ -1,13 +1,12 @@
 import * as React from 'react';
-import { remote } from 'electron';
 import Menu from './../Menu';
 import './style.scss';
 import { startAuthServer } from '../../../../main/auth';
+import { ipcRenderer } from 'electron';
 
 class Welcome extends React.Component<any, any> {
   closeApp() {
-    let mainWindow = remote.getCurrentWindow();
-    mainWindow.close();
+    ipcRenderer.send('close');
   }
 
   render() {

@@ -1,5 +1,4 @@
 import * as http from 'http';
-import * as url from 'url';
 import crypto from 'crypto';
 
 let server: http.Server;
@@ -121,31 +120,42 @@ function scopesMatch(scope: string): boolean {
   return isScopesMatch;
 }
 
-async function handleServerResponse(request: any, response: any) {
-  const queryData = url.parse(request.url, true).query;
+async function handleServerResponse(
+  request: http.IncomingMessage,
+  response: http.ServerResponse
+) {
+  const urlObj = new URL(`http://localhost:${AUTH_PORT}/${request.url}`);
+  const queryState = urlObj.searchParams.get('state');
+
   try {
-    if (queryData.state !== codeState) {
+    if (request.url.endsWith('favicon.ico')) {
+      console.log('favicon.ico requested, ignoring');
+      response.writeHead(200, { 'Content-Type': 'image/x-icon' });
+      response.end();
+      return;
+    }
+
+    if (queryState !== codeState) {
       console.error('Invalid state');
       response.end(
-        'Lofi authorization error: invalid state, , you may close this window and retry.'
+        'Lofi authorization error: invalid state, you may close this window and retry.'
       );
       return;
     }
 
-    if (queryData.error) {
-      console.error(queryData.error.toString());
+    const error = urlObj.searchParams.get('error');
+    if (error) {
+      console.error(error);
       response.end(
-        `Lofi authorization error '${queryData.error}', you may close this window and retry.`
+        `Lofi authorization error '${error}', you may close this window and retry.`
       );
 
       return;
     }
 
-    if (queryData.code) {
-      const data = await retrieveAccessToken(
-        codeVerifier,
-        queryData.code.toString()
-      );
+    const code = urlObj.searchParams.get('code');
+    if (code) {
+      const data = await retrieveAccessToken(codeVerifier, code);
 
       setRefreshTokenInterval(data);
       onTokenRetrieved(data);
