@@ -1,19 +1,20 @@
 import * as os from 'os';
 import LofiSettings from './models/lofiSettings';
+import { version } from '../version.generated';
 
 export const SPOTIFY_API_URL = 'https://api.spotify.com/v1';
 
 export const WINDOWS = os.platform() === 'win32';
 export const LINUX = os.platform() === 'linux';
 export const MACOS = os.platform() === 'darwin';
-export const MACOS_MOJAVE_AND_NEWER =
-  MACOS && parseInt(os.release().split('.')[0]) >= 18;
+export const MACOS_MOJAVE_AND_NEWER = MACOS && parseInt(os.release().split('.')[0]) >= 18;
 
 export const HEIGHT = 150;
 export const WIDTH = 150;
 
 export const MIN_SIDE_LENGTH = 150;
 export const MAX_SIDE_LENGTH = 300;
+export const MAX_BAR_THICKNESS = 20;
 
 export const LOFI_SHUFFLED_PLAYLIST_NAME = 'Shuffled by Lofi';
 
@@ -32,7 +33,7 @@ export const SETTINGS_CONTAINER = {
 };
 
 export const DEFAULT_SETTINGS: LofiSettings = {
-  version: '1.6.0',
+  version: version,
   debug: false,
   hardware_acceleration: true,
   lofi: {
@@ -46,6 +47,8 @@ export const DEFAULT_SETTINGS: LofiSettings = {
       metadata: false,
       scale: 1,
       side: 150,
+      show_progress: false,
+      bar_thickness: 1,
     },
     audio: {
       volume_increment: 10,

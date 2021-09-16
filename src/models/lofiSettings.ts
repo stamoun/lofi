@@ -13,6 +13,8 @@ export default interface LofiSettings {
       y: number;
       hide: boolean;
       metadata: boolean;
+      show_progress: boolean;
+      bar_thickness: number;
       scale: number;
       side: number;
     };

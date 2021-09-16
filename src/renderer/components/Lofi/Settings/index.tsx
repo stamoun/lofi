@@ -3,7 +3,7 @@ import TitleBar from 'frameless-titlebar';
 import './style.scss';
 
 import { visualizations } from '../../../../visualizations/visualizations.js';
-import { MACOS, DEFAULT_SETTINGS } from '../../../../constants';
+import { MACOS, DEFAULT_SETTINGS, MAX_BAR_THICKNESS, LINUX } from '../../../../constants';
 import { get, set } from 'lodash';
 import Store from 'electron-store';
 // import { BrowserWindow } from 'electron';
@@ -31,8 +31,7 @@ class Settings extends React.Component<any, any> {
     this.oldSettings = {};
     this.settingsToWatch = this.initSettingsToWatch();
     this.settingsToWatch.map((setting) => {
-      const currentSetting =
-        get(this.state, setting.name) ?? get(DEFAULT_SETTINGS, setting.name);
+      const currentSetting = get(this.state, setting.name) ?? get(DEFAULT_SETTINGS, setting.name);
       this.oldSettings[setting.name] = currentSetting;
     });
   }
@@ -61,14 +60,14 @@ class Settings extends React.Component<any, any> {
       },
       { name: 'window.hide' },
       { name: 'window.metadata' },
+      { name: 'lofi.window.show_progress' },
+      { name: 'lofi.window.bar_thickness' },
       { name: 'visualization' },
       { name: 'hardware_acceleration' },
       {
         name: 'debug',
         // callback: (value) =>
-        //   value
-        //     ? mainWindow.webContents.openDevTools({ mode: 'detach' })
-        //     : mainWindow.webContents.closeDevTools(),
+        //  value ? mainWindow.webContents.openDevTools({ mode: 'detach' }) : mainWindow.webContents.closeDevTools(),
       },
       { name: 'lofi.audio.volume_increment' },
     ];
@@ -82,10 +81,7 @@ class Settings extends React.Component<any, any> {
     }
 
     this.settingsToWatch.map((setting) => {
-      this.setNewSettingsState(
-        setting.name,
-        get(DEFAULT_SETTINGS, setting.name)
-      );
+      this.setNewSettingsState(setting.name, get(DEFAULT_SETTINGS, setting.name));
       // TODO
       // storage.set(
       //   setting.name,
@@ -112,10 +108,11 @@ class Settings extends React.Component<any, any> {
 
     const settings = this.store.get('settings') as LofiSettings;
     settings.lofi.window.always_on_top = this.state.lofi.window.always_on_top;
-    settings.lofi.window.show_in_taskbar =
-      this.state.lofi.window.show_in_taskbar;
+    settings.lofi.window.show_in_taskbar = this.state.lofi.window.show_in_taskbar;
     settings.lofi.window.hide = this.state.lofi.window.hide;
     settings.lofi.window.metadata = this.state.lofi.window.metadata;
+    settings.lofi.window.show_progress = this.state.lofi.window.show_progress;
+    settings.lofi.window.bar_thickness = this.state.lofi.window.bar_thickness;
     settings.lofi.visualization = this.state.lofi.visualization;
     settings.lofi.audio = this.state.lofi.audio.volume_increment;
     settings.hardware_acceleration = this.state.hardware_acceleration;
@@ -144,8 +141,7 @@ class Settings extends React.Component<any, any> {
   getChangedSettings() {
     const currentSettings: { [x: string]: any } = this.state;
     const changedSettings = this.settingsToWatch.filter(
-      (setting) =>
-        this.oldSettings[setting.name] !== get(currentSettings, setting.name)
+      (setting) => this.oldSettings[setting.name] !== get(currentSettings, setting.name)
     );
 
     return changedSettings;
@@ -160,7 +156,10 @@ class Settings extends React.Component<any, any> {
     return (
       this.state.lofi.audio.volume_increment &&
       this.state.lofi.audio.volume_increment > 0 &&
-      this.state.lofi.audio.volume_increment <= 100
+      this.state.lofi.audio.volume_increment <= 100 &&
+      this.state.lofi.window.bar_thickness &&
+      this.state.lofi.window.bar_thickness > 0 &&
+      this.state.lofi.window.bar_thickness <= MAX_BAR_THICKNESS
     );
   }
 
@@ -192,10 +191,7 @@ class Settings extends React.Component<any, any> {
                     name="always_on_top"
                     id="always_on_top"
                     onChange={() =>
-                      this.setNewSettingsState(
-                        'lofi.window.always_on_top',
-                        !this.state.lofi.window.always_on_top
-                      )
+                      this.setNewSettingsState('lofi.window.always_on_top', !this.state.lofi.window.always_on_top)
                     }
                     checked={this.state.lofi.window.always_on_top}
                   />
@@ -207,51 +203,56 @@ class Settings extends React.Component<any, any> {
                     name=""
                     id="show_in_taskbar"
                     onChange={() =>
-                      this.setNewSettingsState(
-                        'lofi.window.show_in_taskbar',
-                        !this.state.lofi.window.show_in_taskbar
-                      )
+                      this.setNewSettingsState('lofi.window.show_in_taskbar', !this.state.lofi.window.show_in_taskbar)
                     }
                     checked={this.state.lofi.window.show_in_taskbar}
                   />
-                  <label htmlFor="show_in_taskbar">
-                    Display in the task bar
-                  </label>
+                  <label htmlFor="show_in_taskbar">Display in the task bar</label>
                 </div>
                 <div>
                   <input
                     type="checkbox"
                     name="hide"
                     id="hide"
-                    onChange={() =>
-                      this.setNewSettingsState(
-                        'lofi.window.hide',
-                        !this.state.lofi.window.hide
-                      )
-                    }
+                    onChange={() => this.setNewSettingsState('lofi.window.hide', !this.state.lofi.window.hide)}
                     checked={this.state.lofi.window.hide}
                   />
-                  <label htmlFor="hide">
-                    Hide when Spotify is not detected
-                  </label>
+                  <label htmlFor="hide">Hide when Spotify is not detected</label>
                 </div>
                 <div>
                   <input
                     type="checkbox"
                     name="metadata"
                     id="metadata"
-                    onChange={() =>
-                      this.setNewSettingsState(
-                        'lofi.window.metadata',
-                        !this.state.lofi.window.metadata
-                      )
-                    }
+                    onChange={() => this.setNewSettingsState('lofi.window.metadata', !this.state.lofi.window.metadata)}
                     checked={this.state.lofi.window.metadata}
                   />
-                  <label htmlFor="metadata">
-                    Always show song and artist metadata
-                  </label>
+                  <label htmlFor="metadata">Always show song and artist metadata</label>
                 </div>
+                <div>
+                  <input
+                    type="checkbox"
+                    name="show_progress"
+                    id="show_progress"
+                    onChange={() =>
+                      this.setNewSettingsState('lofi.window.show_progress', !this.state.lofi.window.show_progress)
+                    }
+                    checked={this.state.lofi.window.show_progress}
+                  />
+                  <label htmlFor="show_progress">Always show song progress</label>
+                </div>
+              </div>
+              <div>
+                <input
+                  type="number"
+                  min="1"
+                  max={MAX_BAR_THICKNESS}
+                  name="bar_thickness"
+                  id="bar_thickness"
+                  onChange={(e) => this.setNewSettingsState('lofi.window.bar_thickness', e.target.value)}
+                  value={this.state.lofi.window.bar_thickness}
+                />
+                <label htmlFor="bar_thickness">Progress and volume bars thickness</label>
               </div>
             </fieldset>
             <fieldset>
@@ -263,12 +264,7 @@ class Settings extends React.Component<any, any> {
                     disabled={MACOS}
                     value={this.state.lofi.visualization}
                     className="picker"
-                    onChange={(e) =>
-                      this.setNewSettingsState(
-                        'lofi.visualization',
-                        Number(e.target.value)
-                      )
-                    }>
+                    onChange={(e) => this.setNewSettingsState('lofi.visualization', Number(e.target.value))}>
                     {visualizations.map((vis, idx) => (
                       <option key={idx} value={idx}>
                         {vis.name}
@@ -291,17 +287,10 @@ class Settings extends React.Component<any, any> {
                     max="100"
                     name="volume_increment"
                     id="volume_increment"
-                    onChange={(e) =>
-                      this.setNewSettingsState(
-                        'lofi.audio.volume_increment',
-                        e.target.value
-                      )
-                    }
+                    onChange={(e) => this.setNewSettingsState('lofi.audio.volume_increment', e.target.value)}
                     value={this.state.lofi.audio.volume_increment}
                   />
-                  <label htmlFor="volume_increment">
-                    Scroll wheel volume increment
-                  </label>
+                  <label htmlFor="volume_increment">Scroll wheel volume increment</label>
                 </div>
               </div>
             </fieldset>
@@ -310,31 +299,29 @@ class Settings extends React.Component<any, any> {
               <legend>Advanced</legend>
 
               <div className="form-group">
-                <div>
-                  <input
-                    type="checkbox"
-                    name="hardware_acceleration"
-                    id="hardware_acceleration"
-                    onChange={() =>
-                      this.setNewSettingsState(
-                        'hardware_acceleration',
-                        !this.state.hardware_acceleration
-                      )
-                    }
-                    checked={this.state.hardware_acceleration}
-                  />
-                  <label htmlFor="hardware_acceleration">
-                    Use hardware acceleration (requires restart)
-                  </label>
-                </div>
+                {LINUX ? (
+                  // FIXME Linux gpu support is always disabled, see cf. https://github.com/dvx/lofi/issues/149
+                  ''
+                ) : (
+                  <div>
+                    <input
+                      type="checkbox"
+                      name="hardware_acceleration"
+                      id="hardware_acceleration"
+                      onChange={() =>
+                        this.setNewSettingsState('hardware_acceleration', !this.state.hardware_acceleration)
+                      }
+                      checked={this.state.hardware_acceleration}
+                    />
+                    <label htmlFor="hardware_acceleration">Use hardware acceleration (requires restart)</label>
+                  </div>
+                )}
                 <div>
                   <input
                     type="checkbox"
                     name="debug"
                     id="debug"
-                    onChange={(e) =>
-                      this.setNewSettingsState('debug', !this.state.debug)
-                    }
+                    onChange={(e) => this.setNewSettingsState('debug', !this.state.debug)}
                     checked={this.state.debug}
                   />
                   <label htmlFor="debug">Debug mode</label>
@@ -344,10 +331,7 @@ class Settings extends React.Component<any, any> {
           </form>
           <div className="button-container">
             <div className="button-holder">
-              <a
-                href="#"
-                onClick={this.nukeSettings.bind(this)}
-                className="red-button">
+              <a href="#" onClick={this.nukeSettings.bind(this)} className="red-button">
                 Reset to defaults
               </a>
             </div>
@@ -355,9 +339,7 @@ class Settings extends React.Component<any, any> {
               <a
                 href="#"
                 onClick={this.commitSettings.bind(this)}
-                className={`${
-                  this.isFormValid() ? 'green-button' : 'button-disabled'
-                }`}>
+                className={`${this.isFormValid() ? 'green-button' : 'button-disabled'}`}>
                 Save
               </a>
             </div>

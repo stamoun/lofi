@@ -1,17 +1,9 @@
 import * as React from 'react';
 import { ipcRenderer, Rectangle } from 'electron';
 import Store from 'electron-store';
-import {
-  getAuthUrl,
-  refreshAccessToken,
-  AuthData,
-  setTokenRetrievedCallback,
-} from '../../../main/auth';
-import {
-  CONTAINER,
-  MAX_SIDE_LENGTH,
-  MIN_SIDE_LENGTH,
-} from '../../../constants';
+import { getAuthUrl, refreshAccessToken, AuthData, setTokenRetrievedCallback } from '../../../main/auth';
+import { CONTAINER, MAX_SIDE_LENGTH, MIN_SIDE_LENGTH } from '../../../constants';
+
 import Cover from './Cover';
 import Settings from './Settings';
 import About from './About';
@@ -52,20 +44,13 @@ class Lofi extends React.Component<any, any> {
       this.setState({ window_side: onLeftSide ? SIDE.LEFT : SIDE.RIGHT });
     });
 
-    ipcRenderer.on(
-      'window-ready',
-      async (
-        _: Electron.IpcRendererEvent,
-        bounds: Rectangle,
-        screenBounds: Rectangle
-      ) => {
-        this.bounds = bounds;
-        this.screenBounds = screenBounds;
-        this.setScreenSide();
-        await this.setupWindow();
-        this.forceUpdate();
-      }
-    );
+    ipcRenderer.on('window-ready', async (_: Electron.IpcRendererEvent, bounds: Rectangle, screenBounds: Rectangle) => {
+      this.bounds = bounds;
+      this.screenBounds = screenBounds;
+      this.setScreenSide();
+      await this.setupWindow();
+      this.forceUpdate();
+    });
   }
 
   loadSettings() {
@@ -85,10 +70,7 @@ class Lofi extends React.Component<any, any> {
   setScreenSide() {
     const appCenterX = this.bounds.x + this.bounds.width / 2;
 
-    const side =
-      appCenterX - this.screenBounds.x < this.screenBounds.width / 2
-        ? SIDE.LEFT
-        : SIDE.RIGHT;
+    const side = appCenterX - this.screenBounds.x < this.screenBounds.width / 2 ? SIDE.LEFT : SIDE.RIGHT;
 
     this.setState({ window_side: side });
   }
@@ -152,10 +134,7 @@ class Lofi extends React.Component<any, any> {
     }
 
     function onMouseDown(e: any) {
-      if (
-        leftMousePressed(e) &&
-        !e.target['classList'].contains('not-draggable')
-      ) {
+      if (leftMousePressed(e) && !e.target['classList'].contains('not-draggable')) {
         // Cancel old animation frame, fixes mouse getting "stuck" in the drag state
         cancelAnimationFrame(animationId);
         mouseX = e.clientX;
@@ -163,11 +142,7 @@ class Lofi extends React.Component<any, any> {
         document.addEventListener('mouseup', onMouseUp);
         if (e.target['classList'].contains('grab-resize')) {
           requestAnimationFrame(
-            resizeWindow.bind(
-              that,
-              e.target['classList'].contains('top'),
-              e.target['classList'].contains('right')
-            )
+            resizeWindow.bind(that, e.target['classList'].contains('top'), e.target['classList'].contains('right'))
           );
           document.body.classList.remove('click-through');
         } else {
@@ -250,12 +225,8 @@ class Lofi extends React.Component<any, any> {
       return button === 1;
     }
 
-    document
-      .getElementById('visible-ui')
-      .addEventListener('mousedown', onMouseDown);
-    document
-      .getElementById('app-body')
-      .addEventListener('mousemove', onMouseMove);
+    document.getElementById('visible-ui').addEventListener('mousedown', onMouseDown);
+    document.getElementById('app-body').addEventListener('mousemove', onMouseMove);
   }
 
   showAboutWindow() {
@@ -293,9 +264,7 @@ class Lofi extends React.Component<any, any> {
         <div className="bottom left grab-resize"></div>
         <div className="bottom right grab-resize"></div>
         {this.state.showSettings ? (
-          <WindowPortal
-            onUnload={this.hideSettingsWindow.bind(this)}
-            name="settings">
+          <WindowPortal onUnload={this.hideSettingsWindow.bind(this)} name="settings">
             <Settings lofi={this} className="settings-wnd" />
           </WindowPortal>
         ) : null}

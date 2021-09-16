@@ -1,28 +1,14 @@
-import {
-  app,
-  BrowserWindow,
-  ipcMain,
-  screen,
-  shell,
-  Tray,
-  Menu,
-  nativeImage,
-} from 'electron';
+import { app, BrowserWindow, ipcMain, screen, shell, Tray, Menu, nativeImage } from 'electron';
 import Store from 'electron-store';
 import * as path from 'path';
-import {
-  MACOS,
-  LINUX,
-  CONTAINER,
-  SETTINGS_CONTAINER,
-  DEFAULT_SETTINGS,
-} from '../constants';
+import { MACOS, LINUX, CONTAINER, SETTINGS_CONTAINER, DEFAULT_SETTINGS } from '../constants';
 
 // Webpack imports
 import '../../build/Release/black-magic.node';
 import LofiSettings from '../models/lofiSettings';
 import '../../icon.png';
 import '../../icon.ico';
+import { version } from '../../version.generated';
 
 // Visualizations look snappier on 60Hz refresh rate screens if we disable vsync
 app.commandLine.appendSwitch('disable-gpu-vsync');
@@ -32,16 +18,16 @@ app.commandLine.appendSwitch('enable-transparent-visuals');
 // Settings bootstrap
 Store.initRenderer();
 const store = new Store();
-const useGpu =
-  store.get('settings.hardware_acceleration') ??
-  DEFAULT_SETTINGS.hardware_acceleration;
+const useGpu = store.get('settings.hardware_acceleration') ?? DEFAULT_SETTINGS.hardware_acceleration;
 
-if (!useGpu) {
+// FIXME Patch to always disable hardware acceleration on LINUX, cf. https://github.com/dvx/lofi/issues/149
+if (!useGpu || LINUX) {
   app.disableHardwareAcceleration();
 }
 
 let mainWindow: Electron.BrowserWindow | null = null;
 let mousePoller: NodeJS.Timeout;
+let initialBounds: Electron.Rectangle;
 
 // Only allow a single instance
 let isSingleInstance: boolean = app.requestSingleInstanceLock();
@@ -96,12 +82,8 @@ function createWindow() {
       let bb = {
         ix: b.x + (CONTAINER.HORIZONTAL - windowConfig.side) / 2,
         iy: b.y + (CONTAINER.VERTICAL - windowConfig.side) / 2,
-        ax:
-          b.x +
-          (windowConfig.side + (CONTAINER.HORIZONTAL - windowConfig.side) / 2),
-        ay:
-          b.y +
-          (windowConfig.side + (CONTAINER.VERTICAL - windowConfig.side) / 2),
+        ax: b.x + (windowConfig.side + (CONTAINER.HORIZONTAL - windowConfig.side) / 2),
+        ay: b.y + (windowConfig.side + (CONTAINER.VERTICAL - windowConfig.side) / 2),
       };
 
       if (bb.ix <= p.x && p.x <= bb.ax && bb.iy <= p.y && p.y <= bb.ay) {
@@ -120,35 +102,39 @@ function createWindow() {
     mainWindow.webContents.openDevTools({ mode: 'detach' });
   }
 
-  ipcMain.on(
-    'windowMoving',
-    (_: Event, { mouseX, mouseY }: { mouseX: number; mouseY: number }) => {
-      // Use setBounds instead of setPosition
-      // See: https://github.com/electron/electron/issues/9477#issuecomment-406833003
-      const { x, y } = screen.getCursorScreenPoint();
-      mainWindow.setBounds({
-        height: mainWindow.getSize()[0],
-        width: mainWindow.getSize()[1],
-        x: x - mouseX,
-        y: y - mouseY,
-      });
+  ipcMain.on('windowMoving', (_: Event, { mouseX, mouseY }: { mouseX: number; mouseY: number }) => {
+    const { x, y } = screen.getCursorScreenPoint();
 
-      const bounds = mainWindow.getBounds();
-      const screenBounds = screen.getDisplayMatching(bounds).bounds;
-      const centerPosX = bounds.x + bounds.width / 2;
-      const onLeftSide = centerPosX - screenBounds.x < screenBounds.width / 2;
-      mainWindow.webContents.send('window-moved', onLeftSide);
-    }
-  );
+    let bounds: Partial<Electron.Rectangle> = {
+      x: x - mouseX,
+      y: y - mouseY,
+    };
 
-  ipcMain.on(
-    'windowMoved',
-    (_: Event, { mouseX, mouseY }: { mouseX: number; mouseY: number }) => {
-      const { x, y } = screen.getCursorScreenPoint();
-      windowConfig.x = x - mouseX;
-      windowConfig.y = y - mouseY;
+    // Bounds increase even when set to the same value, this is a quirk of the setBounds function
+    // We must keep the bounds constant to keep the window where it should be
+    // See: https://github.com/dvx/lofi/issues/118
+    if (!initialBounds) {
+      initialBounds = mainWindow.getBounds();
+    } else {
+      bounds.width = initialBounds.width;
+      bounds.height = initialBounds.height;
     }
-  );
+
+    // Use setBounds instead of setPosition
+    // See: https://github.com/electron/electron/issues/9477#issuecomment-406833003
+    mainWindow.setBounds(bounds);
+
+    const screenBounds = screen.getDisplayMatching(mainWindow.getBounds()).bounds;
+    const centerPosX = bounds.x + bounds.width / 2;
+    const onLeftSide = centerPosX - screenBounds.x < screenBounds.width / 2;
+    mainWindow.webContents.send('window-moved', onLeftSide);
+  });
+
+  ipcMain.on('windowMoved', (_: Event, { mouseX, mouseY }: { mouseX: number; mouseY: number }) => {
+    const { x, y } = screen.getCursorScreenPoint();
+    windowConfig.x = x - mouseX;
+    windowConfig.y = y - mouseY;
+  });
 
   ipcMain.on('windowResizing', (_: Event, length: number) => {
     windowConfig.side = length;
@@ -158,26 +144,23 @@ function createWindow() {
     mainWindow.close();
   });
 
-  mainWindow.webContents.setWindowOpenHandler(
-    (details: Electron.HandlerDetails) => {
-      console.log(details.frameName);
-      switch (details.frameName) {
-        case 'settings': {
-          createSettingsWindow();
-          break;
-        }
-        case 'about': {
-          createAboutWindow();
-          break;
-        }
-        default: {
-          shell.openExternal(details.url);
-        }
+  mainWindow.webContents.setWindowOpenHandler((details: Electron.HandlerDetails) => {
+    switch (details.frameName) {
+      case 'settings': {
+        createSettingsWindow();
+        break;
       }
-
-      return { action: 'deny' };
+      case 'about': {
+        createAboutWindow();
+        break;
+      }
+      default: {
+        shell.openExternal(details.url);
+      }
     }
-  );
+
+    return { action: 'deny' };
+  });
 }
 
 function createSettingsWindow() {
@@ -246,9 +229,14 @@ let tray = null;
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
 app.on('ready', () => {
-  const version = store.get('settings.version');
+  const settingsVersion = store.get('settings.version');
 
-  if (version === null || version !== String(DEFAULT_SETTINGS.version)) {
+  if (settingsVersion === null || settingsVersion !== String(version)) {
+    // TODO load default settings
+    // settings.resetToDefaultsSync();
+    // Default position is based on OS; (0,0) sometimes breaks
+    // settings.setSync('lofi.window.x', 0 - CONTAINER.HORIZONTAL / 2 + screen.getPrimaryDisplay().size.width / 2);
+    // settings.setSync('lofi.window.y', 0 - CONTAINER.VERTICAL / 2 + screen.getPrimaryDisplay().size.height / 2);
   }
 
   // version mismatch, nuke the settings
@@ -267,16 +255,12 @@ app.on('ready', () => {
     createWindow();
   }
 
-  tray = new Tray(
-    nativeImage.createFromPath(__dirname + '/icon.png').resize({ height: 16 })
-  );
+  tray = new Tray(nativeImage.createFromPath(__dirname + '/icon.png').resize({ height: 16 }));
   const contextMenu = Menu.buildFromTemplate([
     {
-      label: `lofi v${DEFAULT_SETTINGS.version}`,
+      label: `lofi v${version}`,
       enabled: false,
-      icon: nativeImage
-        .createFromPath(__dirname + '/icon.png')
-        .resize({ height: 16 }),
+      icon: nativeImage.createFromPath(__dirname + '/icon.png').resize({ height: 16 }),
     },
     { type: 'separator' },
     {
@@ -302,7 +286,7 @@ app.on('ready', () => {
     },
   ]);
   tray.setContextMenu(contextMenu);
-  tray.setToolTip(`lofi v${DEFAULT_SETTINGS.version}`);
+  tray.setToolTip(`lofi v${version}`);
 
   mainWindow.once('ready-to-show', () => {
     const bounds = mainWindow.getBounds();

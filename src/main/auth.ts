@@ -30,9 +30,7 @@ export interface AuthData {
 
 export function setTokenRetrievedCallback(callback: (data: AuthData) => void) {
   if (onTokenRetrieved) {
-    console.warn(
-      'Token retrieved callback already set, it should only be set once.'
-    );
+    console.warn('Token retrieved callback already set, it should only be set once.');
   }
 
   onTokenRetrieved = callback;
@@ -74,9 +72,7 @@ export async function refreshAccessToken(refreshToken: string) {
 
   console.log('Refreshing access token...');
 
-  const body =
-    `client_id=${AUTH_CLIENT_ID}&grant_type=refresh_token&` +
-    `refresh_token=${refreshToken}`;
+  const body = `client_id=${AUTH_CLIENT_ID}&grant_type=refresh_token&` + `refresh_token=${refreshToken}`;
 
   const res = await fetch(AUTH_TOKEN_URL, {
     method: 'POST',
@@ -90,15 +86,11 @@ export async function refreshAccessToken(refreshToken: string) {
 
   if (res.status !== 200) {
     const errorText = data.error_description;
-    console.error(
-      `status ${res.status}: Failed to retrieve access token\n  ${data.error}: ${errorText}`
-    );
+    console.error(`status ${res.status}: Failed to retrieve access token\n  ${data.error}: ${errorText}`);
     data = null;
   } else if (!scopesMatch(data.scope)) {
     console.warn(
-      `Authorization scopes mismatch\n` +
-        `  Expected: ${AUTH_SCOPES.join(' ')}\n` +
-        `  Token has: '${data.scope}`
+      `Authorization scopes mismatch\n` + `  Expected: ${AUTH_SCOPES.join(' ')}\n` + `  Token has: '${data.scope}`
     );
     data = null;
   } else {
@@ -120,10 +112,7 @@ function scopesMatch(scope: string): boolean {
   return isScopesMatch;
 }
 
-async function handleServerResponse(
-  request: http.IncomingMessage,
-  response: http.ServerResponse
-) {
+async function handleServerResponse(request: http.IncomingMessage, response: http.ServerResponse) {
   const urlObj = new URL(`http://localhost:${AUTH_PORT}/${request.url}`);
   const queryState = urlObj.searchParams.get('state');
 
@@ -137,18 +126,14 @@ async function handleServerResponse(
 
     if (queryState !== codeState) {
       console.error('Invalid state');
-      response.end(
-        'Lofi authorization error: invalid state, you may close this window and retry.'
-      );
+      response.end('Lofi authorization error: invalid state, you may close this window and retry.');
       return;
     }
 
     const error = urlObj.searchParams.get('error');
     if (error) {
       console.error(error);
-      response.end(
-        `Lofi authorization error '${error}', you may close this window and retry.`
-      );
+      response.end(`Lofi authorization error '${error}', you may close this window and retry.`);
 
       return;
     }
@@ -160,9 +145,7 @@ async function handleServerResponse(
       setRefreshTokenInterval(data);
       onTokenRetrieved(data);
 
-      response.end(
-        'Lofi authorization successful, you may now close this window.'
-      );
+      response.end('Lofi authorization successful, you may now close this window.');
     }
   } catch (e) {
     console.error(e);
@@ -172,11 +155,7 @@ async function handleServerResponse(
 }
 
 function base64URLEncode(str: Buffer) {
-  return str
-    .toString('base64')
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/=/g, '');
+  return str.toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
 }
 
 function sha256(str: string) {
@@ -206,10 +185,7 @@ function stopServer() {
   }
 }
 
-async function retrieveAccessToken(
-  codeVerifier: string,
-  code: string
-): Promise<AuthData> {
+async function retrieveAccessToken(codeVerifier: string, code: string): Promise<AuthData> {
   console.log('Retrieving access token...');
 
   const body =
@@ -226,9 +202,7 @@ async function retrieveAccessToken(
 
   if (res.status !== 200) {
     const errorText = await res.text();
-    throw new Error(
-      `status ${res.status}: Failed to retrieve access token\n${errorText}`
-    );
+    throw new Error(`status ${res.status}: Failed to retrieve access token\n${errorText}`);
   }
 
   console.log('Access token retrieved.');
